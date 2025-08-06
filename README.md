@@ -40,9 +40,24 @@ We'll be using the BBC News Dataset from Kaggle containing news articles across 
 ## Setup
 
 1. Clone the repository
-2. Install dependencies: `pip install -r requirements.txt`
-3. Download NLTK data (see setup instructions)
-4. Run the analysis notebooks
+2. Create a virtual environment (recommended):
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   ```
+3. Install dependencies: 
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. Download NLTK data and spaCy models:
+   ```bash
+   python setup.py
+   ```
+5. Test the environment:
+   ```bash
+   python test_env.py
+   ```
+6. Run the analysis notebooks
 
 ## Topics Covered
 
