@@ -77,13 +77,28 @@ def plot_topic_words(topics: List[Dict], num_words: int = WORDS_PER_TOPIC,
     rows = (num_topics + 1) // 2
     
     fig, axes = plt.subplots(rows, cols, figsize=figsize)
-    if rows == 1:
-        axes = axes.reshape(1, -1)
+    
+    # Handle different subplot configurations
+    if rows == 1 and cols == 1:
+        axes = [axes]  # Single subplot
+    elif rows == 1:
+        axes = axes.reshape(1, -1)  # Single row
+    elif cols == 1:
+        axes = axes.reshape(-1, 1)  # Single column
     
     for i, topic in enumerate(topics):
         row = i // cols
         col = i % cols
-        ax = axes[row, col] if rows > 1 else axes[col]
+        
+        # Get the correct axis
+        if rows == 1 and cols == 1:
+            ax = axes[0]
+        elif rows == 1:
+            ax = axes[0, col]
+        elif cols == 1:
+            ax = axes[row, 0]
+        else:
+            ax = axes[row, col]
         
         words = topic['words'][:num_words]
         weights = topic['weights'][:num_words]
@@ -107,7 +122,16 @@ def plot_topic_words(topics: List[Dict], num_words: int = WORDS_PER_TOPIC,
     for i in range(num_topics, rows * cols):
         row = i // cols
         col = i % cols
-        axes[row, col].set_visible(False)
+        
+        # Get the correct axis for hiding
+        if rows == 1 and cols == 1:
+            continue  # No empty subplots
+        elif rows == 1:
+            axes[0, col].set_visible(False)
+        elif cols == 1:
+            axes[row, 0].set_visible(False)
+        else:
+            axes[row, col].set_visible(False)
     
     plt.tight_layout()
     return fig

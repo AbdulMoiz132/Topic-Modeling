@@ -43,13 +43,13 @@ def extract_category_from_url(url):
     return 'general'
 
 def main():
-    print("🔄 BBC News Topic Modeling Analysis")
+    print("BBC News Topic Modeling Analysis")
     print("=" * 50)
     
     # Step 1: Load and preprocess data
-    print("\n📥 Step 1: Loading BBC News Dataset")
+    print("\nStep 1: Loading BBC News Dataset")
     df = pd.read_csv('data/bbc_news.csv')
-    print(f"✅ Loaded {len(df)} articles")
+    print(f"Loaded {len(df)} articles")
     
     # Extract categories and combine text
     df['category'] = df['link'].apply(extract_category_from_url)
@@ -59,25 +59,26 @@ def main():
     # Sample for demonstration (remove this line to use full dataset)
     df = df.sample(n=2000, random_state=42).reset_index(drop=True)
     
-    print(f"📊 Dataset Overview:")
+    print(f"Dataset Overview:")
     print(f"Articles after filtering: {len(df)}")
     print(f"Categories: {df['category'].value_counts()}")
     
     # Step 2: Text Preprocessing
-    print("\n🔧 Step 2: Text Preprocessing")
+    print("\nStep 2: Text Preprocessing")
     preprocessor = TextPreprocessor(use_spacy=True)
     
-    # Preprocess texts
+    # Preprocess texts with less restrictive parameters for NMF
     texts = df['text'].tolist()
-    processed_docs = preprocessor.preprocess_corpus(texts, min_doc_freq=3, max_doc_freq=0.8)
+    processed_docs = preprocessor.preprocess_corpus(texts, min_doc_freq=2, max_doc_freq=0.9)  # Less restrictive
     processed_texts_nmf = [' '.join(doc) for doc in processed_docs]
     
-    print(f"✅ Preprocessing completed")
+    print(f"Preprocessing completed")
     print(f"Total tokens: {sum(len(doc) for doc in processed_docs)}")
     print(f"Average tokens per document: {np.mean([len(doc) for doc in processed_docs]):.1f}")
-    
+    print(f"Vocabulary size for NMF: {len(set(' '.join(processed_texts_nmf).split()))}")
+
     # Step 3: LDA Topic Modeling
-    print("\n🤖 Step 3: LDA Topic Modeling")
+    print("\nStep 3: LDA Topic Modeling")
     num_topics = min(8, df['category'].nunique())  # Adjust based on categories
     
     lda_model = LDATopicModeler(num_topics=num_topics, random_state=42)
@@ -87,23 +88,35 @@ def main():
     lda_topics = lda_model.get_topics(num_words=10)
     lda_coherence = lda_model.calculate_coherence(processed_docs)
     
-    print(f"✅ LDA training completed")
+    print(f"LDA training completed")
     print(f"Coherence score: {lda_coherence:.4f}")
     
     # Step 4: NMF Topic Modeling
-    print("\n🤖 Step 4: NMF Topic Modeling")
+    print("\nStep 4: NMF Topic Modeling")
+    
+    # For NMF, use less aggressive preprocessing
+    print("  Preparing texts for NMF...")
+    nmf_texts = []
+    for text in df['text'].tolist():
+        # Basic cleaning for NMF
+        clean_text = preprocessor.clean_text(text)
+        tokens = preprocessor.tokenize_and_lemmatize(clean_text)
+        # Keep more words for NMF
+        filtered_tokens = [token for token in tokens if len(token) > 2 and token.isalpha()]
+        nmf_texts.append(' '.join(filtered_tokens))
+    
     nmf_model = NMFTopicModeler(num_topics=num_topics, random_state=42, use_tfidf=True)
-    nmf_model.prepare_corpus(processed_texts_nmf)
+    nmf_model.prepare_corpus(nmf_texts)
     nmf_model.train_model(max_iter=100)
     
     nmf_topics = nmf_model.get_topics(num_words=10)
     nmf_coherence = nmf_model.calculate_coherence()
     
-    print(f"✅ NMF training completed")
+    print(f"NMF training completed")
     print(f"Coherence score: {nmf_coherence:.4f}")
     
     # Step 5: Display Results
-    print("\n🎯 Step 5: Topic Analysis Results")
+    print("\nStep 5: Topic Analysis Results")
     print("\n" + "="*60)
     print("LDA TOPICS:")
     print("="*60)
@@ -117,7 +130,7 @@ def main():
         print(f"\nTopic {topic['topic_id']}: {', '.join(topic['words'][:8])}")
     
     # Step 6: Model Comparison
-    print(f"\n📊 Step 6: Model Comparison")
+    print(f"\nStep 6: Model Comparison")
     comparison = compare_models(lda_topics, nmf_topics)
     
     print(f"\nPerformance Comparison:")
@@ -126,19 +139,19 @@ def main():
     
     print(f"\nTopic Overlap Analysis:")
     for overlap in comparison['topic_overlap']:
-        print(f"LDA Topic {overlap['lda_topic']} ↔ NMF Topic {overlap['nmf_topic']}: {overlap['overlap_count']}/5 words overlap")
+        print(f"LDA Topic {overlap['lda_topic']} <-> NMF Topic {overlap['nmf_topic']}: {overlap['overlap_count']}/5 words overlap")
     
     # Step 7: Visualizations
-    print(f"\n🎨 Step 7: Creating Visualizations")
+    print(f"\nStep 7: Creating Visualizations")
     
     # Create topic words visualization
     try:
         fig = plot_topic_words(lda_topics[:4], num_words=8)  # Show first 4 topics
         plt.savefig('visualizations/lda_topics_analysis.png', dpi=300, bbox_inches='tight')
         plt.show()
-        print("✅ Topic words plot created")
+        print("Topic words plot created")
     except Exception as e:
-        print(f"❌ Error creating topic plot: {e}")
+        print(f"Error creating topic plot: {e}")
     
     # Create word clouds
     try:
@@ -160,16 +173,16 @@ def main():
         plt.tight_layout()
         plt.savefig('visualizations/lda_wordclouds.png', dpi=300, bbox_inches='tight')
         plt.show()
-        print("✅ Word clouds created")
+        print("Word clouds created")
     except Exception as e:
-        print(f"❌ Error creating word clouds: {e}")
+        print(f"Error creating word clouds: {e}")
     
     # Step 8: Document Analysis
-    print(f"\n📄 Step 8: Document-Topic Analysis")
+    print(f"\nStep 8: Document-Topic Analysis")
     
     # Analyze sample documents
     for i in range(min(3, len(df))):
-        print(f"\n📋 Document {i+1}:")
+        print(f"\nDocument {i+1}:")
         print(f"Category: {df.iloc[i]['category']}")
         print(f"Title: {df.iloc[i]['title']}")
         
@@ -181,7 +194,7 @@ def main():
         print()
     
     # Step 9: Category-Topic Analysis
-    print(f"\n🏷️ Step 9: Category-Topic Relationship")
+    print(f"\nStep 9: Category-Topic Relationship")
     
     # Create document-topic matrix
     doc_topic_matrix = np.zeros((len(df), num_topics))
@@ -199,7 +212,7 @@ def main():
     print(category_topic_avg.round(3))
     
     # Save results
-    print(f"\n💾 Step 10: Saving Results")
+    print(f"\nStep 10: Saving Results")
     
     # Save models
     lda_model.save_model('results/lda_model.pkl')
@@ -210,10 +223,10 @@ def main():
     df_results['processed_text'] = processed_texts_nmf
     df_results.to_csv('results/processed_bbc_news.csv', index=False)
     
-    print(f"✅ Results saved to results/ directory")
+    print(f"Results saved to results/ directory")
     
-    print(f"\n🎉 BBC News Topic Modeling Analysis Completed!")
-    print(f"📊 Summary:")
+    print(f"\nBBC News Topic Modeling Analysis Completed!")
+    print(f"Summary:")
     print(f"  - Analyzed {len(df)} articles across {df['category'].nunique()} categories")
     print(f"  - Extracted {num_topics} topics using LDA and NMF")
     print(f"  - LDA Coherence: {lda_coherence:.4f}")

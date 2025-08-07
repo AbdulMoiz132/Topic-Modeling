@@ -70,12 +70,35 @@ class BBCNewsLoader:
         try:
             df = pd.read_csv(csv_path)
             
-            # Ensure required columns exist
-            required_cols = ['text', 'category']
-            if not all(col in df.columns for col in required_cols):
-                raise ValueError(f"CSV must contain columns: {required_cols}")
+            # Handle different CSV formats
+            if 'text' in df.columns and 'category' in df.columns:
+                # Standard format (like our test data)
+                return df
+            elif 'title' in df.columns and 'description' in df.columns:
+                # BBC News format - combine title and description, extract category from link
+                df['text'] = (df['title'].fillna('') + '. ' + df['description'].fillna('')).str.strip()
+                
+                # Extract category from URL if possible
+                if 'link' in df.columns:
+                    df['category'] = df['link'].str.extract(r'/news/([^-/]+)')[0].fillna('general')
+                else:
+                    df['category'] = 'general'
+                
+                # Keep original columns for reference
+                return df[['text', 'category', 'title', 'description'] + 
+                         [col for col in df.columns if col not in ['text', 'category', 'title', 'description']]]
+            else:
+                # Try to infer columns
+                text_cols = [col for col in df.columns if 'text' in col.lower() or 'content' in col.lower() or 'article' in col.lower()]
+                category_cols = [col for col in df.columns if 'category' in col.lower() or 'topic' in col.lower() or 'class' in col.lower()]
+                
+                if text_cols and category_cols:
+                    df['text'] = df[text_cols[0]]
+                    df['category'] = df[category_cols[0]]
+                    return df
+                else:
+                    raise ValueError(f"Cannot identify text and category columns. Available columns: {list(df.columns)}")
             
-            return df
         except Exception as e:
             raise Exception(f"Error loading CSV: {e}")
     

@@ -223,32 +223,66 @@ class NMFTopicModeler:
         Args:
             texts: List of preprocessed text documents (space-separated tokens)
         """
-        # Choose vectorizer
+        print(f"Preparing NMF corpus with {len(texts)} documents...")
+        
+        # Filter out very short texts
+        filtered_texts = [text for text in texts if len(text.split()) >= 2]
+        print(f"Filtered texts: {len(filtered_texts)} (removed {len(texts) - len(filtered_texts)} short texts)")
+        
+        # Choose vectorizer with less restrictive settings
         if self.use_tfidf:
             self.vectorizer = TfidfVectorizer(
-                max_df=MAX_DOCUMENT_FREQUENCY,
-                min_df=MIN_DOCUMENT_FREQUENCY,
+                max_df=0.8,      # Remove very common words
+                min_df=2,        # Require words to appear at least 2 times
                 stop_words='english',
                 lowercase=True,
-                max_features=10000
+                max_features=2000,  # Reasonable vocabulary for better topics
+                ngram_range=(1, 1), # Only unigrams
+                strip_accents='ascii',
+                token_pattern=r'\b[a-zA-Z]{2,}\b'  # At least 2 letters
             )
         else:
             self.vectorizer = CountVectorizer(
-                max_df=MAX_DOCUMENT_FREQUENCY,
-                min_df=MIN_DOCUMENT_FREQUENCY,
+                max_df=0.8,
+                min_df=2,
                 stop_words='english',
                 lowercase=True,
-                max_features=10000
+                max_features=2000,
+                ngram_range=(1, 1),
+                strip_accents='ascii',
+                token_pattern=r'\b[a-zA-Z]{2,}\b'
             )
         
-        # Fit and transform documents
-        self.doc_term_matrix = self.vectorizer.fit_transform(texts)
-        self.feature_names = self.vectorizer.get_feature_names_out()
-        
-        print(f"Document-term matrix shape: {self.doc_term_matrix.shape}")
-        print(f"Vocabulary size: {len(self.feature_names)}")
+        try:
+            # Fit and transform documents
+            self.doc_term_matrix = self.vectorizer.fit_transform(filtered_texts)
+            self.feature_names = self.vectorizer.get_feature_names_out()
+            
+            print(f"Document-term matrix shape: {self.doc_term_matrix.shape}")
+            print(f"Vocabulary size: {len(self.feature_names)}")
+            print(f"Matrix density: {self.doc_term_matrix.nnz / (self.doc_term_matrix.shape[0] * self.doc_term_matrix.shape[1]):.4f}")
+            
+            # Store filtered texts for reference
+            self.processed_texts = filtered_texts
+            
+        except ValueError as e:
+            if "no terms remain" in str(e):
+                print("WARNING: Vocabulary too restrictive, using less restrictive settings...")
+                # Fallback with very lenient settings
+                self.vectorizer = TfidfVectorizer(
+                    max_df=0.95,
+                    min_df=1,
+                    stop_words='english',
+                    lowercase=True,
+                    max_features=1000
+                )
+                self.doc_term_matrix = self.vectorizer.fit_transform(filtered_texts)
+                self.feature_names = self.vectorizer.get_feature_names_out()
+                print(f"Fallback: Document-term matrix shape: {self.doc_term_matrix.shape}")
+            else:
+                raise e
     
-    def train_model(self, max_iter: int = 200) -> None:
+    def train_model(self, max_iter: int = 300) -> None:
         """
         Train the NMF model.
         
@@ -260,19 +294,77 @@ class NMFTopicModeler:
         
         print(f"Training NMF model with {self.num_topics} topics...")
         
-        self.model = NMF(
-            n_components=self.num_topics,
-            random_state=self.random_state,
-            max_iter=max_iter,
-            alpha_W=0.1,
-            alpha_H=0.1,
-            l1_ratio=0.5
-        )
+        # Try multiple initializations to avoid local minima
+        best_model = None
+        best_error = float('inf')
         
-        # Fit model and get document-topic matrix
-        self.doc_topic_matrix = self.model.fit_transform(self.doc_term_matrix)
+        for attempt in range(3):  # Try 3 different initializations
+            try:
+                model = NMF(
+                    n_components=self.num_topics,
+                    random_state=self.random_state + attempt,  # Different seed each time
+                    init='nndsvda',  # Better initialization than nndsvd
+                    max_iter=max_iter,
+                    alpha_W=0.1,     # Some regularization
+                    alpha_H=0.1,
+                    l1_ratio=0.0,    # No L1 regularization
+                    solver='cd',     # Coordinate descent solver
+                    beta_loss='frobenius',
+                    tol=1e-4
+                )
+                
+                # Fit model
+                doc_topic_matrix = model.fit_transform(self.doc_term_matrix)
+                
+                # Check reconstruction error
+                if hasattr(model, 'reconstruction_err_') and model.reconstruction_err_ < best_error:
+                    best_error = model.reconstruction_err_
+                    best_model = model
+                    self.doc_topic_matrix = doc_topic_matrix
+                    print(f"  Attempt {attempt + 1}: Error = {model.reconstruction_err_:.4f}")
+                elif best_model is None:  # First attempt or no reconstruction_err_
+                    best_model = model
+                    self.doc_topic_matrix = doc_topic_matrix
+                    print(f"  Attempt {attempt + 1}: Completed")
+                    
+            except Exception as e:
+                print(f"  Attempt {attempt + 1} failed: {e}")
+                continue
+        
+        if best_model is None:
+            raise RuntimeError("All NMF training attempts failed")
+        
+        self.model = best_model
         
         print("NMF training completed!")
+        print(f"Final reconstruction error: {getattr(self.model, 'reconstruction_err_', 'N/A')}")
+        print(f"Number of iterations: {self.model.n_iter_}")
+        
+        # Check topic diversity
+        self._check_topic_diversity()
+    
+    def _check_topic_diversity(self):
+        """Check if topics are diverse or identical."""
+        if self.model is None:
+            return
+            
+        # Compare topic distributions
+        topics_similar = 0
+        for i in range(self.num_topics):
+            for j in range(i + 1, self.num_topics):
+                topic_i = self.model.components_[i]
+                topic_j = self.model.components_[j]
+                
+                # Calculate correlation
+                correlation = np.corrcoef(topic_i, topic_j)[0, 1]
+                if correlation > 0.9:  # Very similar
+                    topics_similar += 1
+        
+        if topics_similar > 0:
+            print(f"WARNING: Found {topics_similar} pairs of highly similar topics")
+            print("This might indicate convergence issues or insufficient data diversity")
+        else:
+            print("✅ Topics appear to be diverse")
     
     def get_topics(self, num_words: int = WORDS_PER_TOPIC) -> List[Dict]:
         """
@@ -330,32 +422,55 @@ class NMFTopicModeler:
     
     def calculate_coherence(self) -> float:
         """
-        Calculate a simple coherence measure for NMF.
+        Calculate topic coherence using word co-occurrence.
         
         Returns:
-            float: Average cosine similarity between top words
+            float: Average topic coherence score
         """
         if self.model is None:
             raise ValueError("Model not trained. Call train_model() first.")
         
-        coherence_scores = []
-        
-        for topic_id in range(self.num_topics):
-            topic_weights = self.model.components_[topic_id]
-            top_word_indices = topic_weights.argsort()[-10:][::-1]
+        try:
+            coherence_scores = []
             
-            # Get word vectors for top words
-            word_vectors = self.doc_term_matrix[:, top_word_indices].T.toarray()
+            for topic_id in range(self.num_topics):
+                topic_weights = self.model.components_[topic_id]
+                
+                # Get top 10 words for this topic
+                top_indices = topic_weights.argsort()[-10:][::-1]
+                top_words = [self.feature_names[i] for i in top_indices]
+                
+                # Calculate coherence based on word co-occurrence
+                coherence = 0.0
+                word_pairs = 0
+                
+                for i in range(len(top_words)):
+                    for j in range(i + 1, len(top_words)):
+                        word1_idx = top_indices[i]
+                        word2_idx = top_indices[j]
+                        
+                        # Count documents containing both words
+                        word1_docs = set(self.doc_term_matrix[:, word1_idx].nonzero()[0])
+                        word2_docs = set(self.doc_term_matrix[:, word2_idx].nonzero()[0])
+                        
+                        co_occurrence = len(word1_docs.intersection(word2_docs))
+                        total_docs = len(word1_docs.union(word2_docs))
+                        
+                        if total_docs > 0:
+                            coherence += co_occurrence / total_docs
+                            word_pairs += 1
+                
+                if word_pairs > 0:
+                    topic_coherence = coherence / word_pairs
+                    coherence_scores.append(topic_coherence)
+                else:
+                    coherence_scores.append(0.0)
             
-            # Calculate pairwise cosine similarities
-            similarities = cosine_similarity(word_vectors)
+            return np.mean(coherence_scores) if coherence_scores else 0.0
             
-            # Average similarity (excluding diagonal)
-            mask = ~np.eye(similarities.shape[0], dtype=bool)
-            avg_similarity = similarities[mask].mean()
-            coherence_scores.append(avg_similarity)
-        
-        return np.mean(coherence_scores)
+        except Exception as e:
+            print(f"Error calculating coherence: {e}")
+            return 0.0
     
     def save_model(self, filepath: str) -> None:
         """Save the trained model."""
