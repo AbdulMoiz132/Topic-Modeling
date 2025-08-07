@@ -1,8 +1,15 @@
-# Dataset folder
-*.csv
-*.json
-*.txt
-bbc-news-dataset/
+# Dataset files (large datasets)
+data/*.csv
+data/*.json
+data/*.txt
+data/bbc-news-dataset/
+!data/README.md
+
+# Generated/processed data
+results/*.csv
+results/*.json
+results/*.html
+results/*.pkl
 
 # Model files
 *.pkl

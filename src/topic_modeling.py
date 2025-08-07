@@ -20,7 +20,10 @@ from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.decomposition import NMF
 from sklearn.metrics.pairwise import cosine_similarity
 
-from .config import *
+try:
+    from .config import *
+except ImportError:
+    from config import *
 
 
 class LDATopicModeler:

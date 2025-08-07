@@ -17,7 +17,10 @@ from typing import List, Dict, Optional
 import pyLDAvis
 import pyLDAvis.gensim_models as gensimvis
 
-from .config import FIGSIZE, WORDS_PER_TOPIC, VISUALIZATIONS_DIR
+try:
+    from .config import FIGSIZE, WORDS_PER_TOPIC, VISUALIZATIONS_DIR
+except ImportError:
+    from config import FIGSIZE, WORDS_PER_TOPIC, VISUALIZATIONS_DIR
 
 
 def create_wordcloud(topic_words: List[str], topic_weights: List[float],

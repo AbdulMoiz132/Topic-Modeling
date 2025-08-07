@@ -1,30 +1,46 @@
 # BBC News Dataset
 
-This folder contains the BBC News Dataset for topic modeling analysis.
+This folder contains the BBC News dataset from Kaggle for topic modeling analysis.
+
+## Dataset File
+
+- **`bbc_news.csv`** - Main BBC News dataset from Kaggle
 
 ## Dataset Structure
 
-The dataset should contain news articles with the following structure:
-- Article text content
-- Category labels (business, entertainment, politics, sport, tech)
-- Article titles/headlines
+The dataset contains BBC news articles with the following columns:
+- **title**: Article headline
+- **pubDate**: Publication date
+- **guid**: Unique identifier
+- **link**: BBC article URL (used for category extraction)
+- **description**: Article summary/content
 
-## Download Instructions
+## Categories
 
-1. Visit Kaggle: https://www.kaggle.com/datasets/hgultekin/bbcnewsarchive
-2. Download the BBC News Dataset
-3. Extract the files to this directory
-4. Ensure the data follows the expected format
-
-## Expected Files
-
-After downloading and extracting, you should have:
-- Raw text files organized by category folders
-- Or a CSV file with columns: text, category, title
+Categories are automatically extracted from BBC URLs:
+- **business**: Financial and economic news
+- **sport**: Sports news and events
+- **technology**: Tech and digital innovation
+- **entertainment**: Arts, culture, and entertainment
+- **politics**: Political news and government
+- **health**: Health and medical news
+- **science**: Scientific research and discoveries
+- **world**: International news
+- **uk**: UK domestic news
+- **general**: Other news topics
 
 ## Data Processing
 
-The raw data will be processed through:
-1. Text cleaning and normalization
-2. Tokenization and preprocessing
-3. Feature extraction for topic modeling
+The dataset is processed by:
+1. **Category Extraction**: Parsing categories from BBC URLs
+2. **Text Combination**: Merging titles and descriptions
+3. **Quality Filtering**: Removing very short or empty articles
+4. **Preprocessing**: Tokenization, cleaning, and lemmatization
+
+## Usage
+
+Use the data loader in `src/data_loader.py` or run:
+```python
+python simple_demo.py  # Quick validation
+python run_real_analysis.py  # Full analysis
+```
