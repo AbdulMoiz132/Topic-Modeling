@@ -20,10 +20,14 @@ from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.decomposition import NMF
 from sklearn.metrics.pairwise import cosine_similarity
 
-try:
-    from .config import *
-except ImportError:
-    from config import *
+# Configuration constants
+DEFAULT_NUM_TOPICS = 5
+RANDOM_STATE = 42
+WORDS_PER_TOPIC = 10
+LDA_ITERATIONS = 1000
+LDA_PASSES = 10
+MIN_DOCUMENT_FREQUENCY = 2
+MAX_DOCUMENT_FREQUENCY = 0.8
 
 
 class LDATopicModeler:
